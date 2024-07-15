@@ -99,34 +99,16 @@ impl Board {
         if self.blocked(player, field)? {
             return Err(Error::FieldBlocked);
         }
-
-        match player {
-            Player::Player0 => {
-                let new = self.raw_board.0.board[field] as i8 + amount;
-                if new < 0 {
-                    return Err(Error::MoveInvalid);
-                }
-                self.raw_board.0.board[field] = new as u8;
-
-                // in case one opponent's checker is hit, move it to the bar
-                self.raw_board.1.bar += self.raw_board.1.board[23 - field];
-                self.raw_board.1.board[23 - field] = 0;
-                Ok(())
-            }
-            Player::Player1 => {
-                let new = self.raw_board.1.board[field] as i8 + amount;
-                if new < 0 {
-                    return Err(Error::MoveInvalid);
-                }
-                self.raw_board.1.board[field] = new as u8;
-
-                // in case one opponent's checker is hit, move it to the bar
-                self.raw_board.0.bar += self.raw_board.0.board[23 - field];
-                self.raw_board.0.board[23 - field] = 0;
-                Ok(())
-            }
-            Player::Nobody => Err(Error::PlayerInvalid),
+        let player_board = self.get_mut_raw_board_for_player(player)?;
+        let new = player_board.board[field] as i8 + amount;
+        if new < 0 {
+            return Err(Error::MoveInvalid);
         }
+        player_board.board[field] = new as u8;
+        let opponent = self.get_mut_raw_board_for_opponent(player)?;
+        opponent.bar += opponent.board[23 - field];
+        opponent.board[23 - field] = 0;
+        Ok(())
     }
 
     /// Check if a field is blocked for a player
@@ -135,64 +117,89 @@ impl Board {
             return Err(Error::FieldInvalid);
         }
 
-        match player {
-            Player::Player0 => {
-                if self.raw_board.1.board[23 - field] > 1 {
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-            Player::Player1 => {
-                if self.raw_board.0.board[23 - field] > 1 {
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-            Player::Nobody => Err(Error::PlayerInvalid),
+        let opponent = self.get_raw_board_for_opponent(player)?;
+        if opponent.board[23 - field] > 1 {
+            Ok(true)
+        } else {
+            Ok(false)
         }
     }
 
     /// Set checkers for a player on the bar. This method adds amount to the already existing
     /// checkers there.
     pub fn set_bar(&mut self, player: Player, amount: i8) -> Result<(), Error> {
-        match player {
-            Player::Player0 => {
-                let new = self.raw_board.0.bar as i8 + amount;
-                if new < 0 {
-                    return Err(Error::MoveInvalid);
-                }
-                self.raw_board.0.bar = new as u8;
-                Ok(())
-            }
-            Player::Player1 => {
-                let new = self.raw_board.1.bar as i8 + amount;
-                if new < 0 {
-                    return Err(Error::MoveInvalid);
-                }
-                self.raw_board.1.bar = new as u8;
-                Ok(())
-            }
-            Player::Nobody => Err(Error::PlayerInvalid),
+        let raw_board = self.get_mut_raw_board_for_player(player)?;
+        let new = raw_board.bar as i8 + amount;
+        if new < 0 {
+            return Err(Error::MoveInvalid);
         }
+        raw_board.bar = new as u8;
+        Ok(())
     }
 
     /// Set checkers for a player off the board. This method adds amount to the already existing
     /// checkers there.
     pub fn set_off(&mut self, player: Player, amount: u8) -> Result<(), Error> {
+        self.get_mut_raw_board_for_player(player)?.off += amount;
+        Ok(())
+    }
+
+    fn get_raw_board_for_player(&self, player: Player) -> Result<&PlayerBoard, Error> {
+        match player {
+            Player::Player0 => Ok(&self.raw_board.0),
+            Player::Player1 => Ok(&self.raw_board.1),
+            Player::Nobody => Err(Error::PlayerInvalid),
+        }
+    }
+
+    fn get_raw_board_for_opponent(&self, player: Player) -> Result<&PlayerBoard, Error> {
+        match player {
+            Player::Player0 => Ok(&self.raw_board.1),
+            Player::Player1 => Ok(&self.raw_board.0),
+            Player::Nobody => Err(Error::PlayerInvalid),
+        }
+    }
+
+    fn get_mut_raw_board_for_player(&mut self, player: Player) -> Result<&mut PlayerBoard, Error> {
+        match player {
+            Player::Player0 => Ok(&mut self.raw_board.0),
+            Player::Player1 => Ok(&mut self.raw_board.1),
+            Player::Nobody => Err(Error::PlayerInvalid),
+        }
+    }
+
+    fn get_mut_raw_board_for_opponent(&mut self, player: Player) -> Result<&mut PlayerBoard, Error> {
+        match player {
+            Player::Player0 => Ok(&mut self.raw_board.1),
+            Player::Player1 => Ok(&mut self.raw_board.0),
+            Player::Nobody => Err(Error::PlayerInvalid),
+        }
+    }
+
+    /// generate a move from dice roll for player
+    pub fn generate_a_move(&self, player: Player, dice: u8) {
         match player {
             Player::Player0 => {
-                let new = self.raw_board.0.off + amount;
-                self.raw_board.0.off = new;
-                Ok(())
+                if self.raw_board.0.bar > 0 {
+                    let field: usize = dice as usize - 1;
+                    MoveChecker {
+                        player,
+                        from: BoardPosition::Bar,
+                        to: BoardPosition::Field(field),
+                    };
+                } else {
+                    // move checker
+                    board.board.iter().enumerate().for_each(|(i, val)| {
+                        if *val > 0 {
+                            // move checker
+                        }
+                    });
+                }
             }
             Player::Player1 => {
-                let new = self.raw_board.1.off + amount;
-                self.raw_board.1.off = new;
-                Ok(())
+                let mut board = self.raw_board.1.clone();
             }
-            Player::Nobody => Err(Error::PlayerInvalid),
+            Player::Nobody => {}
         }
     }
 }
@@ -215,6 +222,18 @@ impl Default for PlayerBoard {
             off: 0,
         }
     }
+}
+
+pub struct MoveChecker {
+    player: Player,
+    from: BoardPosition,
+    to: BoardPosition,
+}
+
+pub enum BoardPosition {
+    Bar,
+    Off,
+    Field(usize),
 }
 
 /// Trait to move checkers
