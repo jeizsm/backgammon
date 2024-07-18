@@ -1,10 +1,10 @@
 //! # Play a Backgammon Game
-use crate::rules::Cube;
-use crate::rules::Player;
+use crate::rules::{Cube, Players, Player};
 use crate::rules::{Board, Move};
 use crate::rules::{Dices, Roll};
 use crate::rules::{GameRules, Rules};
 use crate::Error;
+use rand::seq::SliceRandom; // Import SliceRandom to get the choose method on slices
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -45,6 +45,73 @@ impl fmt::Display for Game {
         s.push_str(&format!("Crawford game: {}\n", self.crawford));
         s.push_str(&format!("Since Crawford game: {}\n", self.since_crawford));
         write!(f, "{}", s)
+    }
+}
+
+/// Represents a Backgammon game with player dices
+#[derive(Debug, Clone)]
+pub struct GameWithPlayerDices {
+    /// rules of the game
+    pub board: Board,
+    /// last dice pair rolled
+    pub players: Players,
+}
+
+impl GameWithPlayerDices {
+    /// Create a new game with player dices
+    pub fn new(first_seed: [u8; 32], second_seed: [u8; 32]) -> Self {
+        let players = Players::new(first_seed, second_seed);
+        Self { board: Board::new(), players}
+    }
+
+    /// make a move
+    pub fn make_a_move(&mut self) -> Result<(), Error> {
+        if let Some(ref mut dice) = self.players.current.dices {
+            match dice.consumed {
+                (false, _, _, _) => {
+                    let moves = self.board.generate_a_possible_moves(self.players.current.player, dice.values.0 as usize)?;
+                    let r#move = moves.choose(&mut self.players.current.rng).ok_or(Error::MoveInvalid)?;
+                    self.board.apply_move(r#move)?;
+                    dice.consumed.0 = true;
+                    Ok(())
+                }
+                (true, false, true, true) => {
+                    let moves = self.board.generate_a_possible_moves(self.players.current.player, dice.values.1 as usize)?;
+                    let r#move = moves.choose(&mut self.players.current.rng).ok_or(Error::MoveInvalid)?;
+                    self.board.apply_move(r#move)?;
+                    dice.consumed.1 = true;
+                    self.players.switch();
+                    Ok(())
+                }
+                (true, false, _, _) => {
+                    let moves = self.board.generate_a_possible_moves(self.players.current.player, dice.values.1 as usize)?;
+                    let r#move = moves.choose(&mut self.players.current.rng).ok_or(Error::MoveInvalid)?;
+                    self.board.apply_move(r#move)?;
+                    dice.consumed.1 = true;
+                    Ok(())
+                }
+                (true, true, false, _) => {
+                    let moves = self.board.generate_a_possible_moves(self.players.current.player, dice.values.0 as usize)?;
+                    let r#move = moves.choose(&mut self.players.current.rng).ok_or(Error::MoveInvalid)?;
+                    self.board.apply_move(r#move)?;
+                    dice.consumed.2 = true;
+                    Ok(())
+                }
+                (true, true, true, false) => {
+                    let moves = self.board.generate_a_possible_moves(self.players.current.player, dice.values.0 as usize)?;
+                    let r#move = moves.choose(&mut self.players.current.rng).ok_or(Error::MoveInvalid)?;
+                    self.board.apply_move(r#move)?;
+                    dice.consumed.3 = true;
+                    self.players.switch();
+                    Ok(())
+                }
+                _ => {
+                    Err(Error::RollFirst)
+                }
+            }
+        } else {
+            Err(Error::RollFirst)
+        }
     }
 }
 

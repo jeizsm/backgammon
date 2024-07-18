@@ -9,7 +9,7 @@ mod player;
 pub use player::Player;
 /// Implements the pair of dices
 mod dices;
-pub use dices::{Dices, Roll};
+pub use dices::{Dices, Roll, Players, PlayerWithDice};
 
 use serde::{Deserialize, Serialize};
 use std::fmt;

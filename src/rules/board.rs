@@ -144,6 +144,77 @@ impl Board {
         Ok(())
     }
 
+    /// apply move from move checker
+    pub fn apply_move(&mut self, move_checker: &MoveChecker) -> Result<(), Error> {
+        match (&move_checker.from, &move_checker.to) {
+            (BoardPosition::Bar, BoardPosition::Field(to)) => {
+                self.set_bar(move_checker.player, -1)?;
+                self.set(move_checker.player, *to, 1)?;
+            }
+            (BoardPosition::Field(from), BoardPosition::Field(to)) => {
+                self.set(move_checker.player, *from, -1)?;
+                self.set(move_checker.player, *to, 1)?;
+            }
+            (BoardPosition::Field(from), BoardPosition::Off) => {
+                self.set(move_checker.player, *from, -1)?;
+                self.set_off(move_checker.player, 1)?;
+            }
+            _ => return Err(Error::MoveInvalid),
+        }
+        Ok(())
+    }
+
+    /// check if game is finished
+    pub fn is_finished(&self) -> bool {
+        self.is_winner(Player::Player0) || self.is_winner(Player::Player1)
+    }
+
+    /// check if player is winner
+    pub fn is_winner(&self, player: Player) -> bool {
+        self.get_raw_board_for_player(player).expect("for player").off == 15
+    }
+
+    /// generate a move from dice roll for player
+    pub fn generate_a_possible_moves(&self, player: Player, dice: usize) -> Result<Vec<MoveChecker>, Error> {
+        let player_board = self.get_raw_board_for_player(player)?;
+        if player_board.bar > 0 && self.blocked(player, 24 - dice)? {
+            let move_checker = MoveChecker {
+                player,
+                from: BoardPosition::Bar,
+                to: BoardPosition::Field(dice - 1),
+            };
+            if !self.blocked(player, dice - 1)? {
+                return Ok(vec![move_checker]);
+            } else {
+                return Err(Error::MoveInvalid);
+            }
+        } else {
+            let all_fields = player_board.board.iter().enumerate().filter(|(_, &x)| x > 0).collect::<Vec<(usize, &u8)>>();
+            let all_moves = all_fields.into_iter().filter_map(|(i, _field)| {
+                if let Some(new) = i.checked_sub(dice) {
+                    let move_checker = MoveChecker {
+                        player,
+                        from: BoardPosition::Field(i),
+                        to: BoardPosition::Field(new),
+                    };
+                    if !self.blocked(player, new).ok()? {
+                        Some(move_checker)
+                    } else {
+                        None
+                    }
+                } else {
+                    let move_checker = MoveChecker {
+                        player,
+                        from: BoardPosition::Field(i),
+                        to: BoardPosition::Off,
+                    };
+                    Some(move_checker)
+                }
+            }).collect();
+            return Ok(all_moves);
+        }
+    }
+
     fn get_raw_board_for_player(&self, player: Player) -> Result<&PlayerBoard, Error> {
         match player {
             Player::Player0 => Ok(&self.raw_board.0),
@@ -176,32 +247,6 @@ impl Board {
         }
     }
 
-    /// generate a move from dice roll for player
-    pub fn generate_a_move(&self, player: Player, dice: u8) {
-        match player {
-            Player::Player0 => {
-                if self.raw_board.0.bar > 0 {
-                    let field: usize = dice as usize - 1;
-                    MoveChecker {
-                        player,
-                        from: BoardPosition::Bar,
-                        to: BoardPosition::Field(field),
-                    };
-                } else {
-                    // move checker
-                    board.board.iter().enumerate().for_each(|(i, val)| {
-                        if *val > 0 {
-                            // move checker
-                        }
-                    });
-                }
-            }
-            Player::Player1 => {
-                let mut board = self.raw_board.1.clone();
-            }
-            Player::Nobody => {}
-        }
-    }
 }
 
 /// Represents the Backgammon board for one player
@@ -224,13 +269,15 @@ impl Default for PlayerBoard {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct MoveChecker {
     player: Player,
     from: BoardPosition,
     to: BoardPosition,
 }
 
-pub enum BoardPosition {
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
+enum BoardPosition {
     Bar,
     Off,
     Field(usize),
@@ -490,5 +537,25 @@ mod tests {
     fn set_wrong_amount1() {
         let mut board = Board::new();
         assert!(board.set(Player::Player1, 23, -3).is_err());
+    }
+
+    #[test]
+    fn generate_a_move() {
+        let board = Board::new();
+        let move_checker = board.generate_a_possible_moves(Player::Player0, 1).unwrap();
+        assert_eq!(move_checker.len(), 3);
+        assert_eq!(move_checker, vec![MoveChecker {
+            player: Player::Player0,
+            from: BoardPosition::Field(5),
+            to: BoardPosition::Field(4),
+        }, MoveChecker {
+            player: Player::Player0,
+            from: BoardPosition::Field(7),
+            to: BoardPosition::Field(6),
+        }, MoveChecker {
+            player: Player::Player0,
+            from: BoardPosition::Field(23),
+            to: BoardPosition::Field(22),
+        }]);
     }
 }

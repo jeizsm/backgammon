@@ -98,7 +98,7 @@ mod error;
 pub use error::Error;
 /// Implements a Backgammon game
 mod game;
-pub use game::Game;
+pub use game::{Game, GameWithPlayerDices};
 /// Implements a Backgammon match
 mod r#match;
 pub use r#match::Match;
